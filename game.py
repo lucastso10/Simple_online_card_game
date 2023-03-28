@@ -1,4 +1,3 @@
-import player.py
 from random import choice, randint
 
 # R = Red

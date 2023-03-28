@@ -44,11 +44,10 @@ class Player:
 # essa classe só vai existir no servidor e não nos clientes
 class HostGame:
   # players is a list of ips from other players
-  def __init__(self, host : player.Player, players):
+  def __init__(self, host : Player):
     self.host = host
-    self.players  = [host]
-    self.players.append(players)
-    self.currentCard = player.Card(choice(card_types), choice(card_attribute))
+    self.players  = []
+    self.currentCard = Card(choice(card_types), choice(card_attribute))
     self.currentPlayer = 0
     self.direction = 1
   
@@ -58,7 +57,7 @@ class HostGame:
   # Function to play a card in the game.
   # It treats every type of card calling functions for them
   # if necessary
-  def playCard(self, player : player.Player, card : player.Card):
+  def playCard(self, player : Player, card : Card):
     if card.playable():
       self.currentCard = card
       if card.attribute == "B":
@@ -98,15 +97,10 @@ class HostGame:
   def playerChangeColor(self):
     #add a way for the player to input the color they want
     color = "R"
-    self.currentCard = player.Card(color, "-1")
+    self.currentCard = Card(color, "-1")
 
 class ClientGame:
-  def __init__(self, host : player.Player, players):
-    self.host = host
-    self.players  = [host]
-    self.players.append(players)
-    self.currentCard = player.Card(choice(card_types), choice(card_attribute))
-    self.currentPlayer = 0
-    self.direction = 1
-
+  def __init__(self, player : Player):
+    self.player  = player
+    return
     
