@@ -15,6 +15,8 @@ card_attribute = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "R", "B", "+
 # CC = Change Color
 special_cards = ["+4", "CC"]
 
+BUFFER_SIZE = 1024
+
 class Card:
   def __init__(self, type, attribute):
     self.cardType = type
@@ -100,17 +102,102 @@ class HostGame:
     self.currentPlayer = -1
     self.direction = 1
     self.started = False
+
+  # this will run in loop and will manage the game.
+  def rounRound(self):
+    if self.currentPlayer == -1:
+      self.sendRound()
+      self.printRound()
+      self.hostPlay()
+    else:
+      self.sendRound()
+      self.printRound()
+      self.waitClientPlay()
+    self.nextRound()
+
+  def previousPlayer(self):
+    if self.direction == 1:
+      if self.currentPlayer == -1:
+        return len(self.players) - 1
+      else:
+        return self.currentPlayer - 1
+    else:
+      if self.currentPlayer == len(self.players) - 1:
+        return 0
+      else:
+        return self.currentPlayer + 1
+
+  def nextPlayer(self):
+    if self.direction == 1:
+      if self.currentPlayer == len(self.players) - 1:
+        return 0
+      else:
+        return self.currentPlayer + 1
+    else:
+      if self.currentPlayer == -1:
+        return len(self.players) - 1
+      else:
+        return self.currentPlayer - 1
+        
+  def sendRound(self):
+    message = "1;"
+    message += str(self.previousPlayer() + 1) + ";"
+    message += str(self.players[int(self.previousPlayer())].cardQnt) + ";"
+    message += self.nextPlayer() + ";"
+    message += self.currentPlayer + ";"
+    message += self.currentCard.cardType + ";"
+    message += self.currentCard.attribute
+    for player in self.players:
+      player.addr[0].send(message.encode('UTF-8'))
   
   def printRound(self):
     players_list = self.host.name + " | "
-    for player in self.players:
-      players_list += player.name + " " + player.cardQnt +" | "
+    for i in range(0, len(self.players) - 1):
+      players_list += self.players[i][0] + " " + self.playersQntCards[i] +" | "
       
-    if self.currentPlayer >= 0:
-      return f"{players_list}\n\nIt is {self.players[self.currentPlayer]}'s turn:\n{self.currentCard}"
+    if self.currentPlayer != -1 :
+      print(f"{players_list}\nNext player is {self.players[int(self.nextPlayer())]}\n\nIt is {self.players[self.currentPlayer][0]}'s turn:\n\n{self.currentCard}\n\nYour cards: {self.host.cardsToString()}")
     else:
-      return f"{players_list}\n\nIt is your turn, {self.host.name}!:\n{self.currentCard}"
+      print(f"{players_list}\nNext player is {self.players[int(self.nextPlayer())]}\n\nIt is your turn!\n\n{self.currentCard}\n\nYour cards: {self.host.cardsToString()}")
 
+
+  def hostPlay(self):
+    valid = False
+    while not valid:
+      print("Type the card you want to play (type;attribute example: R;+2) (if you want to buy a card type B):")
+      card = input()
+
+      card.upper()
+
+      if card == "B":
+        self.hostBuyCard()
+        continue
+
+      if card not in self.host.cardsToList():
+        print("Please type a card that you have!")
+        continue
+
+      card = card.split(";")
+
+      card = Card(card[0], card[1])
+
+      if not card.isPlayable(self.currentCard):
+        print("This card is not playable")
+        continue
+
+      valid = True
+
+    
+    self.playCard(card)
+
+  def waitClientPlay(self):
+    message = self.players[self.currentPlayer].recv(BUFFER_SIZE)
+    message = message.decode('UTF-8').split(";")
+    self.players[self.currentPlayer].cardQnt = message[0]
+    card = Card(message[1], message[2])
+    self.playCard(card)
+    
+  
   # Function to play a card in the game.
   # It treats every type of card calling functions for them
   # if necessary
@@ -118,23 +205,18 @@ class HostGame:
     self.currentCard = card
     
     if card.attribute == "B":
-      self.block()
+      self.blockCard()
       
     elif card.attribute == "R":
-      if self.direction == 1:
-        self.direction = -1
-      else:
-        self.direction = 1
+      self.reverseCard()
         
     elif card.attribute == "+2" or card.attribute == "+4":
       self.nextPlayerBuyCard(card.attribute)
       pass
-      
-    self.nextTurn()
 
   # it changes to the next turn by moving the currentPlayer
   # depeding on the direction of the game
-  def nextTurn(self):
+  def nextRound(self):
     self.currentPlayer += self.direction
     if self.currentPlayer == len(self.currentPlayer):
       self.currentPlayer = 0
@@ -142,8 +224,29 @@ class HostGame:
       self.currentPlayer = len(self.currentPlayer) - 1
 
   # it does the same as nextTurn, it is just to clarify
-  def block(self):
-    self.nextTurn()
+  def blockCard(self):
+    message = "2;"
+    message = self.nextPlayer()
+    for player in self.players:
+      player.addr[0].send(message.encode('UTF-8'))
+    self.nextRound()
+
+  def reverseCard(self):
+    if self.direction == 1:
+      self.direction = -1
+    else:
+      self.direction = 1
+    message = "4;"
+    message = str(self.nextPlayer() + 1)
+    for player in self.players:
+      player.addr[0].send(message.encode('UTF-8'))
+
+  def nextPlayerBuyCard(self, attribute):
+    message = "3;"
+    message = str(self.nextPlayer() + 1) + ";"
+    message = attribute[-1:]
+    for player in self.players:
+      player.addr[0].send(message.encode('UTF-8'))
 
 # ========================================================================
 
@@ -179,7 +282,7 @@ class ClientGame:
   # Client play cards
   def clientPlay(self):
     valid = False
-    while valid:
+    while not valid:
       print("Type the card you want to play (type;attribute example: R;+2) (if you want to buy a card type B):")
       card = input()
 
@@ -189,7 +292,7 @@ class ClientGame:
         self.clientBuyCard()
         continue
 
-      if card not in self.players.cardsToList():
+      if card not in self.clientPlayer.cardsToList():
         print("Please type a card that you have!")
         continue
 

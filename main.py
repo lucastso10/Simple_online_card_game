@@ -60,8 +60,11 @@ def server():
   if len(game.players) == 0:
     print("Sorry but you need some friends to play!")
     return
-
+  
   server.settimeout(0)
+
+  while game.started:
+    game.runRound()
   
   return
 
