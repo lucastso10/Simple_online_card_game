@@ -1,4 +1,5 @@
 import socket
+from time import sleep
 from random import choice
 
 # R = Red
@@ -112,10 +113,17 @@ class HostGame:
       self.sendRound()
       self.printRound()
       self.hostPlay()
+      if len(self.host.cards) == 0:
+        self.winner()
+        self.started = False
     else:
       self.sendRound()
       self.printRound()
       self.waitClientPlay()
+      if self.players[self.currentPlayer].cardQuantity == '0':
+        self.winner()
+        self.started = False
+      
     self.nextRound()
 
   def previousPlayer(self):
@@ -170,13 +178,13 @@ class HostGame:
     if self.currentPlayer != 0:
       print(f"{players_list}\nNext player is {self.players[int(self.nextPlayer())].name}\n\nIt is {self.players[self.currentPlayer].name}'s turn:\n\n{self.currentCard}\n\nYour cards: {self.host.cardsToString()}")
     else:
-      print(f"{players_list}\nNext player is {self.players[int(self.nextPlayer())]}\n\nIt is your turn!\n\n{self.currentCard}\n\nYour cards: {self.host.cardsToString()}")
+      print(f"{players_list}\nNext player is {self.players[int(self.nextPlayer())].name}\n\nIt is your turn!\n\n{self.currentCard}\n\nYour cards: {self.host.cardsToString()}")
 
 
   def hostPlay(self):
     valid = False
     while not valid:
-      print("Type the card you want to play (type;attribute example: R;+2) (if you want to buy a card type B):")
+      print("\nType the card you want to play (type;attribute example: R;+2) (if you want to buy a card type B):")
       card = input()
 
       card.upper()
@@ -205,22 +213,15 @@ class HostGame:
         self.host.cards.remove(card_on_list)
         
     if card.attribute == "CC":
-      valid = False
-      while not valid:
-        print("What color do you want to change to?")
-        color = input()
-        color.upper()
-        if color not in card_types[0:3]:
-          print("Please type a valid color")
-          continue
-        card = Card(color, "-1")
-        valid = True
+      card.cardType = self.hostChoseColor()
+    if card.attribute == "+4":
+      card.cardType = self.hostChoseColor()
     self.playCard(card)
 
   def waitClientPlay(self):
     message = self.players[self.currentPlayer].addr[0].recv(BUFFER_SIZE)
     message = message.decode('UTF-8').split(";")
-    self.players[self.currentPlayer].cardQnt = message[0]
+    self.players[self.currentPlayer].cardQuantity = message[0]
     card = Card(message[1], message[2])
     self.playCard(card)
     
@@ -239,7 +240,6 @@ class HostGame:
         
     elif card.attribute == "+2" or card.attribute == "+4":
       self.nextPlayerBuyCard(card.attribute)
-      pass
 
   # it changes to the next turn by moving the currentPlayer
   # depeding on the direction of the game
@@ -258,6 +258,12 @@ class HostGame:
       if type(player) == Player:
         continue
       player.addr[0].send(message.encode('UTF-8'))
+
+    if self.nextPlayer() == 0:
+      print("You've been blocked!")
+    else:
+      print(f"{self.players[self.nextPlayer()].name} has been blocked!")
+    sleep(0.3)
     self.nextRound()
 
   def reverseCard(self):
@@ -272,18 +278,54 @@ class HostGame:
         continue
       player.addr[0].send(message.encode('UTF-8'))
 
+    print("A reversed has been played")
+    sleep(0.3)
+
   def nextPlayerBuyCard(self, attribute):
     message = "3;"
-    message += str(self.nextPlayer() + 1) + ";"
+    message += str(self.nextPlayer()) + ";"
     message += attribute[-1:]
     for player in self.players:
       if type(player) == Player:
         continue
       player.addr[0].send(message.encode('UTF-8'))
 
+    if self.nextPlayer() == 0:
+      for i in range(0,int(attribute[-1:])):
+        self.host.buyCard()
+      print(f"You've bought {attribute[-1:]} cards!")
+    else:
+      print(f"{self.players[self.nextPlayer()].name} has bought {attribute[-1:]} cards!")
+    sleep(0.3)
+
   def hostBuyCard(self):
     self.host.buyCard()
     print(f"\n{self.currentCard}\n\nYour cards: {self.host.cardsToString()}")
+
+  def hostChoseColor(self):
+    valid = False
+    while not valid:
+      print("What color do you want to change to?")
+      color = input()
+      color.upper()
+      if color not in card_types[0:4]:
+        print("Please type a valid color")
+        continue
+      valid = True
+    return color
+
+  def winner(self):
+    message = "0;"
+    message += str(self.currentPlayer)
+    for player in self.players:
+      if type(player) == Player:
+        continue
+      player.addr[0].send(message.encode('UTF-8'))
+
+    if self.currentPlayer == 0:
+      print("\n\nCongratulations you won!")
+    else:
+      print(f"\n\n{self.players[self.currentPlayer].name} has won! Better luck next time!")
 
 # ========================================================================
 
@@ -297,22 +339,20 @@ class ClientGame:
     self.playersQtdCards = []
     for i in range (0, len(self.players)):
       self.playersQtdCards.append(7)
-    print(self.players)
-    print(self.playersQtdCards)
     return
 
   # print the round and if it is the player turn calls clientPlay
   def printRound(self, round):
     print("==========================")
-    players_list = self.clientPlayer.name + " | "
+    players_list = self.clientPlayer.name + str(len(self.clientPlayer.cards)) + " | "
     for i in range(0, len(self.players) - 1):
       players_list += self.players[i] + " " + str(self.playersQtdCards[i]) +" | "
       
     if self.players[int(round)] == self.clientPlayer.name :
-      print(f"{players_list}\nNext player is {self.players[self.nextPlayer]}\n\nIt is {self.players[int(round)]}'s turn:\n{self.currentCard}\n\nYour cards: {self.clientPlayer.cardsToString()}")
+      print(f"{players_list}\nNext player is {self.players[self.nextPlayer]}\n\nIt is your turn, {self.clientPlayer.name}!:\n{self.currentCard}\n\nYour cards: {self.clientPlayer.cardsToString()}")
       self.clientPlay()
     else:
-      print(f"{players_list}\nNext player is {self.players[self.nextPlayer]}\n\nIt is your turn, {self.clientPlayer.name}!:\n{self.currentCard}\n\nYour cards: {self.clientPlayer.cardsToString()}")
+      print(f"{players_list}\nNext player is {self.players[self.nextPlayer]}\n\nIt is {self.players[int(round)]}'s turn:\n{self.currentCard}\n\nYour cards: {self.clientPlayer.cardsToString()}")
 
   # client buys card
   def clientBuyCard(self):
@@ -323,7 +363,7 @@ class ClientGame:
   def clientPlay(self):
     valid = False
     while not valid:
-      print("Type the card you want to play (type;attribute example: R;+2) (if you want to buy a card type B):")
+      print("\nType the card you want to play (type;attribute example: R;+2) (if you want to buy a card type B):")
       card = input()
 
       card.upper()
@@ -351,24 +391,28 @@ class ClientGame:
         self.clientPlayer.cards.remove(card_on_list)
     
     if card.attribute == "CC":
-      valid = False
-      while not valid:
-        print("What color do you want to change to?")
-        color = input()
-        color.upper()
-        if color not in card_types[0:4]:
-          print("Please type a valid color")
-          continue
-        card = Card(color, "-1")
-        valid = True
+      card.cardType = self.clientChoseColor()
+    if card.attribute == "+4":
+      card.cardType = self.clientChoseColor()
     
     message = str(len(self.clientPlayer.cards)) + ";" + card.cardType + ";" + card.attribute
     self.client.send(message.encode('UTF-8'))
 
+  def clientChoseColor(self):
+    valid = False
+    while not valid:
+      print("What color do you want to change to?")
+      color = input()
+      color.upper()
+      if color not in card_types[0:4]:
+        print("Please type a valid color")
+        continue
+      valid = True
+    return color
+
   # interpretes messages sent by the server and does what is needed
   # for a reference for every message please refer to messages.txt
   def interpreter(self, message):
-    print(message)
     if message[0] == "1":
       self.playersQtdCards[int(message[1])] = int(message[2])
       self.nextPlayer = int(message[3])
