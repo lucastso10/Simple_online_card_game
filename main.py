@@ -1,5 +1,6 @@
 import socket
 import threading
+import time
 from classes import Card, Player, Client, HostGame, ClientGame
 
 PORT = 5050
@@ -21,16 +22,25 @@ def readyStage(server, game):
         conn.send(message.encode('UTF-8'))
         
     player = Client(name.decode('UTF-8'), (conn, addr))
-    print(f"\nPlayer connected! {player}")
+    print(f"\nPlayer connected! {player.name}")
     game.players.append(player)
 
-  # server sends initial information to clients
-  players_string = f"{game.host.name};"
+  # multicasts players list
+  players_string = ""
   for player in game.players:
     players_string += player.name + ";"
-
   for player in game.players:
+    if type(player) == Player:
+      continue
     player.addr[0].send(players_string[:-1].encode('UTF-8'))
+
+  time.sleep(0.5)
+  # multicasts first card of the game
+  card = str(game.currentCard.cardType) + ";" + str(game.currentCard.attribute)
+  for player in game.players:
+    if type(player) == Player:
+      continue
+    player.addr[0].send(card.encode('UTF-8'))
     
 
 def server():
@@ -63,6 +73,8 @@ def server():
   
   server.settimeout(0)
 
+  time.sleep(1)
+
   while game.started:
     game.runRound()
   
@@ -86,18 +98,25 @@ def client():
   client.send(name.encode('UTF-8'))
   data, addr = client.recvfrom(BUFFER_SIZE)
   print(f"{data.decode('UTF-8')}")
+
+  time.sleep(0.5)
   
   # wait to receive player list
-  data, addr = client.recvfrom(BUFFER_SIZE)
+  players_list, addr = client.recvfrom(BUFFER_SIZE)
   player = Player(name)
-  data = data.decode('UTF-8').split(";")
-  game = ClientGame(client, player, data)
+  players_list = players_list.decode('UTF-8').split(";")
+
+  # receives the first card of the game
+  current_card, addr = client.recvfrom(BUFFER_SIZE)
+  current_card = current_card.decode('UTF-8').split(";")
+  current_card = Card(current_card[0], current_card[1])
+  game = ClientGame(client, player, players_list, current_card)
 
   # Game
   while data[0] != "0":
     data, addr = game.client.recvfrom(BUFFER_SIZE)
     data = data.decode('UTF-8').split(";")
-    game.interpreter(data, client)
+    game.interpreter(data)
   client.close()
   return
 
