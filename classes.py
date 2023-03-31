@@ -21,7 +21,7 @@ class Card:
     self.attribute = attribute
       
   def __str__(self):
-    return f"{self.cardType} {self.attribute}"
+    return f"{self.cardType};{self.attribute}"
 
   def playable(self, card):
     if self.cardType == "S":
@@ -33,6 +33,8 @@ class Card:
     else:
       return False
 
+# ========================================================================
+      
 # every client and the server has its own unique player
 class Player:
   def __init__(self, name):
@@ -56,11 +58,22 @@ class Player:
       
     self.cards.append(Card(type, attribute))
 
-  def stringCards(self):
+  def cardsToString(self):
     cards_string = ""
     for card in self.cards:
       cards_string += f"{card} |"
     return cards_string[:-2]
+
+  def cardsToList(self):
+    card_string = ""
+    card_list = []
+    for card in self.cards:
+      card_string = f"{card}"
+      card_list.append(card_string)
+      
+    return card_list
+
+# ========================================================================
 
 class Client:
   def __init__(self, name, addr):
@@ -71,6 +84,9 @@ class Client:
   def __str__(self):
     return f"{self.name} ({self.addr})"
 
+
+# ========================================================================
+    
 # this class only exists in the server and it dictates how the game will play out
 # every round it's gonna tell its state to every client letting them adapt accordingly
 class HostGame:
@@ -85,7 +101,7 @@ class HostGame:
     self.direction = 1
     self.started = False
   
-  def __str__(self):
+  def printRound(self):
     players_list = self.host.name + " | "
     for player in self.players:
       players_list += player.name + " " + player.cardQnt +" | "
@@ -129,35 +145,91 @@ class HostGame:
   def block(self):
     self.nextTurn()
 
+# ========================================================================
+
 class ClientGame:
   def __init__(self, client : socket, player : Player, players, card : Card):
     self.client = client
-    self.player = player
+    self.clientPlayer = player
+    self.nextPlayer = 1
     self.players = players
-    self.direction = 1
     self.currentCard = card
     self.playersQtdCards = []
     for i in range (1, len(self.players)):
       self.playersQtdCards.append(7)
     return
 
+  # print the round and if it is the player turn calls clientPlay
+  def printRound(self, round):
+    players_list = self.clientPlayer.name + " | "
+    for i in range(0, len(self.players) - 1):
+      players_list += self.players[i] + " " + self.playersQtdCards[i] +" | "
+      
+    if self.players[int(round)] >= self.clientPlayer.name :
+      print(f"{players_list}\nNext player is {self.players[self.nextPlayer]}\n\nIt is {self.players[int(round)]}'s turn:\n{self.currentCard}\n\nYour cards: {self.clientPlayer.cardsToString()}")
+      self.clientPlay()
+    else:
+      print(f"{players_list}\nNext player is {self.players[self.nextPlayer]}\n\nIt is your turn, {self.clientPlayer.name}!:\n{self.currentCard}\n\nYour cards: {self.clientPlayer.cardsToString()}")
+
+  # client buys card
+  def clientBuyCard(self):
+    self.clientPlayer.buyCard()
+    print(f"\n{self.currentCard}\n\nYour cards: {self.clientPlayer.cardsToString()}")
+
+  # Client play cards
+  def clientPlay(self):
+    valid = False
+    while valid:
+      print("Type the card you want to play (type;attribute example: R;+2) (if you want to buy a card type B):")
+      card = input()
+
+      card.upper()
+
+      if card == "B":
+        self.clientBuyCard()
+        continue
+
+      if card not in self.players.cardsToList():
+        print("Please type a card that you have!")
+        continue
+
+      card = card.split(";")
+
+      card = Card(card[0], card[1])
+
+      if not card.isPlayable(self.currentCard):
+        print("This card is not playable")
+        continue
+
+      valid = True
+    message = str(len(self.clientPlayer.cards)) + ";" + card.cardType + ";" + card.attribute
+    self.client.send(message.enconde('UTF-8'))
+
   # interpretes messages sent by the server and does what is needed
   # for a reference for every message please refer to messages.txt
   def interpreter(self, message):
     if message[0] == "1":
       self.playersQtdCards[int(message[1])] = int(message[2])
-      self.direction = int(message[3])
+      self.nextPlayer = int(message[3])
       self.currentCard = Card(message[5], message[6])
 
-      if self.players[int(message[4])] == self.player.name:
-        self.currentPlay()
-      else:
-        self.printRound()
+      self.printRound(message[4])
         
     elif message[0] == "2":
-      pass
+      if self.players[int(message[1])] == self.clientPlayer.name:
+        print("you have been blocked!")
+      else:
+        print(f"{self.players[self.nextPlayer]} has been blocked!")
     elif message[0] == "3":
-      pass
+      if self.players[int(message[1])] == self.clientPlayer.name:
+        for i in range(1,message[2]):
+          self.clientPlayer.buyCard()
+        print(f"You've bought {message[2]} cards!")
+      else:
+        print(f"{self.players[self.nextPlayer]} bought {message[2]} cards!")
     elif message[0] == "0":
-      pass
+      if self.players[int(message[1])] == self.clientPlayer.name:
+        print("You have won!")
+      else:
+        print(f"{self.players[int(message[1])]} won the game!")
     

@@ -5,6 +5,7 @@ from classes import Card, Player, Client, HostGame, ClientGame
 PORT = 5050
 BUFFER_SIZE = 1024
 
+# stage where players connect to game
 def readyStage(server, game):
   while not game.started:
     try:
@@ -23,6 +24,7 @@ def readyStage(server, game):
     print(f"\nPlayer connected! {player}")
     game.players.append(player)
 
+  # server sends initial information to clients
   players_string = f"{game.host.name};"
   for player in game.players:
     players_string += player.name + ";"
@@ -58,6 +60,8 @@ def server():
   if len(game.players) == 0:
     print("Sorry but you need some friends to play!")
     return
+
+  server.settimeout(0)
   
   return
 
@@ -79,13 +83,16 @@ def client():
   client.send(name.encode('UTF-8'))
   data, addr = client.recvfrom(BUFFER_SIZE)
   print(f"{data.decode('UTF-8')}")
+  
+  # wait to receive player list
   data, addr = client.recvfrom(BUFFER_SIZE)
   player = Player(name)
   data = data.decode('UTF-8').split(";")
-  game = ClientGame(player, data)
-  
+  game = ClientGame(client, player, data)
+
+  # Game
   while data[0] != "0":
-    data, addr = client.recvfrom(BUFFER_SIZE)
+    data, addr = game.client.recvfrom(BUFFER_SIZE)
     data = data.decode('UTF-8').split(";")
     game.interpreter(data, client)
   client.close()

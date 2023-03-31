@@ -11,7 +11,7 @@ Normal play (first value 1)
 0 - 1
 1 - previous player
 2 - number of cards previous player has
-3 - direction
+3 - next player
 4 - current player (if 0 is host)
 5 - Current card type
 6 - Current card attribute
@@ -24,6 +24,10 @@ player has to buy (first value 3)
 0 - 3
 1 - player who has to buy
 2 - number of cards
+
+A reversed has benn played
+0 - 4
+1 - next player
 
 player has won (first value 0)
 0 - 0
