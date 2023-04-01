@@ -120,7 +120,7 @@ class HostGame:
       self.sendRound()
       self.printRound()
       self.waitClientPlay()
-      if self.players[self.currentPlayer].cardQuantity == '0':
+      if self.players[self.currentPlayer].cardQuantity == 0:
         self.winner()
         self.started = False
       
@@ -221,7 +221,7 @@ class HostGame:
   def waitClientPlay(self):
     message = self.players[self.currentPlayer].addr[0].recv(BUFFER_SIZE)
     message = message.decode('UTF-8').split(";")
-    self.players[self.currentPlayer].cardQuantity = message[0]
+    self.players[self.currentPlayer].cardQuantity = int(message[0])
     card = Card(message[1], message[2])
     self.playCard(card)
     
@@ -295,6 +295,7 @@ class HostGame:
         self.host.buyCard()
       print(f"You've bought {attribute[-1:]} cards!")
     else:
+      self.players[self.nextPlayer()].cardQuantity += int(attribute[-1:])
       print(f"{self.players[self.nextPlayer()].name} has bought {attribute[-1:]} cards!")
     sleep(0.3)
 
@@ -344,15 +345,15 @@ class ClientGame:
   # print the round and if it is the player turn calls clientPlay
   def printRound(self, round):
     print("==========================")
-    players_list = self.clientPlayer.name + str(len(self.clientPlayer.cards)) + " | "
-    for i in range(0, len(self.players) - 1):
+    players_list = ""
+    for i in range(0, len(self.players)):
       players_list += self.players[i] + " " + str(self.playersQtdCards[i]) +" | "
       
     if self.players[int(round)] == self.clientPlayer.name :
-      print(f"{players_list}\nNext player is {self.players[self.nextPlayer]}\n\nIt is your turn, {self.clientPlayer.name}!:\n{self.currentCard}\n\nYour cards: {self.clientPlayer.cardsToString()}")
+      print(f"{players_list}\nNext player is {self.players[self.nextPlayer]}\n\nIt is your turn, {self.clientPlayer.name}!:\n\n{self.currentCard}\n\nYour cards: {self.clientPlayer.cardsToString()}")
       self.clientPlay()
     else:
-      print(f"{players_list}\nNext player is {self.players[self.nextPlayer]}\n\nIt is {self.players[int(round)]}'s turn:\n{self.currentCard}\n\nYour cards: {self.clientPlayer.cardsToString()}")
+      print(f"{players_list}\nNext player is {self.players[self.nextPlayer]}\n\nIt is {self.players[int(round)]}'s turn:\n\n{self.currentCard}\n\nYour cards: {self.clientPlayer.cardsToString()}")
 
   # client buys card
   def clientBuyCard(self):
@@ -431,6 +432,7 @@ class ClientGame:
           self.clientPlayer.buyCard()
         print(f"You've bought {message[2]} cards!")
       else:
+        self.playersQtdCards[int(message[1])] += int(message[2])
         print(f"{self.players[self.nextPlayer]} bought {message[2]} cards!")
     elif message[0] == "0":
       if self.players[int(message[1])] == self.clientPlayer.name:
